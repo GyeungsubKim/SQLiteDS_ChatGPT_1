@@ -1,0 +1,9 @@
+<Solution>
+  <Configurations>
+    <Platform Name="Any CPU" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="SQLiteDS_ChatGPT_1/SQLiteDS_ChatGPT_1.csproj">
+    <Platform Solution="*|x86" Project="x86" />
+  </Project>
+</Solution>
