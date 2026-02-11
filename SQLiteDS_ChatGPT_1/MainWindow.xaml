@@ -9,9 +9,9 @@
 
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="145"/>
-            <RowDefinition Height="Auto" MinHeight="202"/>
-            <RowDefinition Height="28"/>
+            <RowDefinition Height="135"/>
+            <RowDefinition Height="*" MinHeight="200"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <Grid Grid.Row="0">
             <Grid.ColumnDefinitions>

@@ -410,9 +410,10 @@ namespace SQLiteDS_ChatGPT_1.Core
                     sb.AppendLine($"CREATE INDEX IF NOT EXISTS IDX_{tableName}_Code ON [{tableName}] (Code);");
                 }
 
-                if (tableName.Equals("tblWork"))
+                if (!tableName.Equals("tblWork"))
                 {
-                    sb.AppendLine($"CREATE TRIGGER IF NOT EXISTS trg_Log{tableName} AFTER INSERT ON [{tableName}] ");
+                    sb.AppendLine($"CREATE TRIGGER IF NOT EXISTS trg_Log{tableName} ");
+                    sb.AppendLine($"AFTER INSERT ON [{tableName}] ");
                     sb.AppendLine("BEGIN");
                     sb.AppendLine($"    INSERT INTO tblWork (TableId, ForeignKey) ");
                     sb.AppendLine($"    VALUES ({(int)type}, NEW.Idx);");

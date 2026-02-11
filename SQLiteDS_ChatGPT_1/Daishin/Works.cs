@@ -13,11 +13,11 @@ namespace SQLiteDS_ChatGPT_1.Daishin
     /// </summary>
     public class Works(FeedBus bus)
     {
-        //public event Action<object, WorkType>? OnReceive;
+        public event Action<object, WorkType>? OnReceive;
         private readonly CybosConnection _connection = new();
         private readonly Daishin _daishin = new();
         private readonly ViewModel _view = new(bus);
-        private readonly FeedBus _bus = bus;
+        //private readonly FeedBus _bus = bus;
 
         public List<FutureCode>? FuCodes;
         public List<OptionCode>? OpCodes;
@@ -47,6 +47,7 @@ namespace SQLiteDS_ChatGPT_1.Daishin
                 oCur ??= new();
                 oCur.Received += OCur_Received;
 
+                int curr = 0;
                 int month = int.Parse(OpCodes![0].Month!.ToString());
 
                 // 당월과 익월 별도로 2번 입력한다
@@ -95,7 +96,8 @@ namespace SQLiteDS_ChatGPT_1.Daishin
                     }
                     string mon = "당";
                     if (m > 0) mon = "당월 + 익";
-                    ViewModel.AddLog($"{mon}월 {count}개 서버 입력");
+                    else curr = count;
+                    ViewModel.AddLog($"{mon}월 {count - curr}개 서버 입력");
                 }
                 ViewModel.AddLog($"옵션 입력 개수 : {count}");
             }
@@ -138,7 +140,7 @@ namespace SQLiteDS_ChatGPT_1.Daishin
                     BestBid = ComHelpers.AsDecimal(mst!.GetHeaderValue(59)),
                     TradeType = (byte)ComHelpers.AsLong(mst!.GetHeaderValue(118)),
                 };
-                _bus?.Publish(cur, WorkType.OptionCur);
+                OnReceive!(cur, WorkType.OptionCur);
                 await Task.Delay(1);
                 result = cur.Close;
             }
@@ -179,7 +181,7 @@ namespace SQLiteDS_ChatGPT_1.Daishin
                     BestBid = ComHelpers.AsDecimal(oCur!.GetHeaderValue(18)),
                     TradeType = (byte)ComHelpers.AsLong(oCur!.GetHeaderValue(23)),
                 };
-                _bus?.Publish(cur, WorkType.OptionCur);
+                OnReceive!(cur, WorkType.OptionCur);
                 await Task.Delay(1).ConfigureAwait(false);
             }
             catch (Exception ex)
@@ -272,7 +274,7 @@ namespace SQLiteDS_ChatGPT_1.Daishin
                     Price = ComHelpers.AsDecimal(kCur!.GetHeaderValue(2)),
                     Change = ComHelpers.AsDecimal(kCur!.GetHeaderValue(3)),
                 };
-                _bus?.Publish(ksp, WorkType.Ksp);//.InsertKsp(ksp);
+                OnReceive!(ksp, WorkType.Ksp);//.InsertKsp(ksp);
             }
             catch (Exception ex)
             {
@@ -295,7 +297,7 @@ namespace SQLiteDS_ChatGPT_1.Daishin
                     Price = ComHelpers.AsDecimal(sCur!.GetHeaderValue(2)),
                     Change = ComHelpers.AsDecimal(sCur!.GetHeaderValue(3)),
                 };
-                _bus?.Publish(ksp, WorkType.Ksp);//.InsertKsp(ksp);
+                OnReceive!(ksp, WorkType.Ksp);//.InsertKsp(ksp);
             }
             catch (Exception ex)
             {
@@ -335,7 +337,7 @@ namespace SQLiteDS_ChatGPT_1.Daishin
                                 Price = close,
                                 Change = close - past,
                             };
-                            _bus?.Publish(ksp, WorkType.Ksp);//.InsertKsp(ksp);
+                            OnReceive!(ksp, WorkType.Ksp);//.InsertKsp(ksp);
                             System.Windows.Application.Current.Dispatcher.Invoke(() =>
                             {
                                 int count = int.Parse(_view!.Kospi.Replace(",", "")) + 1;
@@ -376,7 +378,7 @@ namespace SQLiteDS_ChatGPT_1.Daishin
                     SellQuoteCount = ComHelpers.AsLong(fMst.GetHeaderValue(53)),
                     BuyQuoteCount = ComHelpers.AsLong(fMst.GetHeaderValue(70)),
                 };
-                _bus?.Publish(master, WorkType.Master);//.InsertMst(master);
+                OnReceive!(master, WorkType.Master);//.InsertMst(master);
 
                 System.Windows.Application.Current.Dispatcher.Invoke(() =>
                 {
@@ -408,7 +410,7 @@ namespace SQLiteDS_ChatGPT_1.Daishin
                     Ask1Quantity = ComHelpers.AsLong(fBid!.GetHeaderValue(7)),
                     Bid1Quantity = ComHelpers.AsLong(fBid!.GetHeaderValue(24)),
                 };
-                _bus?.Publish(ba, WorkType.BidsAsks);//.InsertBid(ba);
+                OnReceive!(ba, WorkType.BidsAsks);//.InsertBid(ba);
             }
             catch (Exception ex)
             {
@@ -440,7 +442,7 @@ namespace SQLiteDS_ChatGPT_1.Daishin
                     Basis = ComHelpers.AsDecimal(fCur!.GetHeaderValue(5)),
                     K200 = ComHelpers.AsDecimal(fCur!.GetHeaderValue(4)),
                 };
-                _bus?.Publish(cur, WorkType.FutureCur);//.InsertCur(cur);
+                OnReceive!(cur, WorkType.FutureCur);//.InsertCur(cur);
             }
             catch (Exception ex)
             {
@@ -463,7 +465,7 @@ namespace SQLiteDS_ChatGPT_1.Daishin
                     Price = ComHelpers.AsDecimal(fExc!.GetHeaderValue(2)),
                     Change = ComHelpers.AsDecimal(fExc!.GetHeaderValue(3)),
                 };
-                _bus?.Publish(ksp, WorkType.Ksp);//.InsertKsp(ksp);
+                OnReceive!(ksp, WorkType.Ksp);//.InsertKsp(ksp);
                 Task.Delay(1);
             }
             catch (Exception ex)
@@ -515,7 +517,7 @@ namespace SQLiteDS_ChatGPT_1.Daishin
                         BuyVolume = ComHelpers.AsLong(_c7721s!.GetDataValue(2, i)),
                         BuyValue = ComHelpers.AsLong(_c7721s!.GetDataValue(3, i)),
                     };
-                    _bus?.Publish(trade, WorkType.Trade);
+                    OnReceive!(trade, WorkType.Trade);
                     Task.Delay(1).ConfigureAwait(false);
                 }
             }
@@ -564,7 +566,7 @@ namespace SQLiteDS_ChatGPT_1.Daishin
                             Volume = ComHelpers.AsLong(cls.GetDataValue(5, i)),
                             OpenInterest = ComHelpers.AsLong(cls.GetDataValue(6, i)),
                         };
-                        _bus?.Publish(hl, WorkType.HighLow);//.InsertHighLow(hl);
+                        OnReceive!(hl, WorkType.HighLow);//.InsertHighLow(hl);
                     }
                 }
             }
@@ -612,7 +614,7 @@ namespace SQLiteDS_ChatGPT_1.Daishin
                             Volume = ComHelpers.AsLong(cls.GetDataValue(5, i)),
                             OpenInterest = 0
                         };
-                        _bus?.Publish(hl, WorkType.HighLow);
+                        OnReceive!(hl, WorkType.HighLow);
                     }
                 }
             }
@@ -649,7 +651,7 @@ namespace SQLiteDS_ChatGPT_1.Daishin
                         DoPrice = decimal.Parse(codes.GetData(4, i).ToString()),
                     };
                     OpCodes?.Add(code);
-                    _bus.Publish(code, WorkType.OptionCode);
+                    OnReceive!(code, WorkType.OptionCode);
                 }
             }
             catch (Exception ex)
@@ -674,7 +676,7 @@ namespace SQLiteDS_ChatGPT_1.Daishin
                         Name = ComHelpers.AsString(codes.GetData(1, i)),
                     };
                     FuCodes?.Add(code);
-                    _bus?.Publish(code, WorkType.FutureCode);
+                    OnReceive!(code, WorkType.FutureCode);
                 }
             }
             catch (Exception ex)

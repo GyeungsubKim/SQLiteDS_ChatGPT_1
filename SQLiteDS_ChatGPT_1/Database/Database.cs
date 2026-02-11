@@ -1,23 +1,13 @@
 ﻿using Microsoft.Data.Sqlite;
 using SQLiteDS_ChatGPT_1.Core;
 using SQLiteDS_ChatGPT_1.Models;
-using System.Threading.Channels;
-using System.Threading.Tasks;
 
 namespace SQLiteDS_ChatGPT_1.Database
 {
-    public class Database(string path) : IDisposable
+    public sealed class Database(string path) : IDisposable
     {
         private readonly string _conn = $"Data Source={path}";
-        private readonly Channel<(object, WorkType)> _ch =
-            Channel.CreateBounded<(object, WorkType)>( new BoundedChannelOptions(200_000)
-            {
-                SingleReader = false,
-                SingleWriter = false,
-                FullMode = BoundedChannelFullMode.Wait
-            });
-        private readonly CancellationTokenSource _cts = new();
-        private Task[]? _workers;
+        private readonly Dictionary<WorkType, SqliteCommand> _cmdCache = new();
 
         public void Init()
         {
@@ -25,94 +15,81 @@ namespace SQLiteDS_ChatGPT_1.Database
             con.Open();
 
             var cmd = con.CreateCommand();
-
-            string pragma = @"PRAGMA journal_mode=WAL;";
-            pragma += "PRAGMA synchronous=NORMAL;";
-            pragma += "PRAGMA temp_store=MEMORY;";
-            pragma += "PRAGMA mmap_size=30_000_000_000;";
-            pragma += "PRAGMA cache_size=-200_000;";
-            pragma += "PRAGMA page_size=32768;";
-            pragma += "PRAGME locking_mode=EXCLUSIVE;";
-            cmd.CommandText = pragma;
+            cmd.CommandText = @"
+                PRAGMA journal_mode=WAL;
+                PRAGMA synchronous=NORMAL;
+                PRAGMA temp_store=MEMORY;
+                PRAGMA cache_size=-200000;
+                PRAGMA mmap_size=30000000000;
+                PRAGMA page_size=32768;
+                PRAGMA locking_mode=EXCLUSIVE;";
             cmd.ExecuteNonQuery();
 
             cmd.CommandText = SqlCreateGenerator.GenerateAllTablesSql();
             cmd.ExecuteNonQuery();
+
+            //PrepareCommands(con);
         }
-        public void Start(int workerCount = 4)
+        public SqliteConnection Open()
         {
-            _workers = new Task[workerCount];
-            for (int i = 0; i < workerCount; i++) 
-                _workers[i] = Task.Run(Worker);
+            var con = new SqliteConnection(_conn);
+            con.Open();
+            return con;
         }
-        public async Task EnqueueData<T>(T data, WorkType type)
-            => await _ch.Writer.WriteAsync((data!, type));
-        private async Task Worker()
+        public void WriteBatch(List<(object Data, WorkType Type)> batch)
         {
             using var con = new SqliteConnection(_conn);
             con.Open();
 
-            Dictionary<WorkType, SqliteCommand> localCache = [];
+            using var tran = con.BeginTransaction();
 
-            PrepareCommands(con, localCache);
-
-            var batch = new List<(object, WorkType)>(1_000);
-
-            while (!_cts.IsCancellationRequested)
+            foreach (var (data, type) in batch)
             {
-                var item = await _ch.Reader.ReadAsync(_cts.Token);
-                batch.Add(item);
-
-                while (_ch.Reader.TryRead(out var more))
+                var cmd = _cmdCache[type];
+                cmd.Transaction = tran;
+                Bind(cmd, data);
+                try
                 {
-                    batch.Add(more);
-                    if (batch.Count >= 500) break;
+                    cmd.ExecuteNonQuery();
                 }
-
-                using var trans = con.BeginTransaction();
-
-                foreach (var (obj, type) in batch)
+                catch (Exception ex)
                 {
-                    var cmd = localCache[type];
-                    cmd.Transaction = trans;
-                    Bind(cmd, obj, type);
-                    try
-                    {
-                        cmd.ExecuteNonQuery();
-                    }
-                    catch (Exception ex)
-                    {
-                        ViewModel.AddLog($"ExecuteNonQuery Error : {ex.Message}");
-                    }
+                    ViewModel.AddLog($"Insert Data Error : {ex.Message}");
                 }
+            }
+            tran.Commit();
+        }
+        private void Bind(SqliteCommand cmd, object data)
+        {
+            var props = data.GetType().GetProperties();
 
-                trans.Commit();
-                batch.Clear();
+            try
+            {
+                int i = 0;
+                foreach (var p in props)
+                {
+                    if (p.Name == "Idx") continue;
+                    cmd.Parameters[i++].Value = p.GetValue(data) ?? DBNull.Value;
+                }
+            }
+            catch (Exception ex)
+            {
+                ViewModel.AddLog($"Bind Data Error : {ex.Message}");
             }
         }
-        private void Bind(SqliteCommand cmd, object obj, WorkType type)
+        private void PrepareCommands(SqliteConnection con)
         {
-            cmd.Parameters.Clear();
-            foreach (var col in type.GetColums())
-            {
-                var value = obj.GetType().GetProperty(col)?.GetValue(obj);
-                cmd.Parameters.AddWithValue($"@{col}", value ?? DBNull.Value);
-            }
-        }
-        private void PrepareCommands(SqliteConnection con, Dictionary<WorkType, SqliteCommand> cache)
-        {
-            foreach (WorkType t in Enum.GetValues(typeof(WorkType))) 
+            foreach (WorkType type in Enum.GetValues<WorkType>())
             {
                 var cmd = con.CreateCommand();
-                cmd.CommandText = t.GetInsertSql();
-                cache[t] = cmd;
+                cmd.CommandText = type.GetInsertSql();
+
+                foreach (var c in type.GetColums())
+                    cmd.Parameters.Add(new SqliteParameter($"@{c}", null));
+
+                _cmdCache[type] = cmd;
             }
         }
-        public void Dispose()
-        {
-            _cts.Cancel();
-            _workers?.ToList().ForEach(t => t.Wait());
-            GC.SuppressFinalize(this);
-        }
+        public void Dispose() { }
     }
 }
